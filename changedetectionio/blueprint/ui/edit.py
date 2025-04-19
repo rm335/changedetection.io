@@ -213,9 +213,6 @@ def construct_blueprint(datastore: ChangeDetectionStore, update_q, queuedWatchMe
             if request.method == 'POST' and not form.validate():
                 flash("An error occurred, please see below.", "error")
 
-            visualselector_data_is_ready = datastore.visualselector_data_is_ready(uuid)
-
-
             # JQ is difficult to install on windows and must be manually added (outside requirements.txt)
             jq_support = True
             try:
@@ -225,11 +222,12 @@ def construct_blueprint(datastore: ChangeDetectionStore, update_q, queuedWatchMe
 
             watch = datastore.data['watching'].get(uuid)
 
+            # if system or watch is configured to need a chrome type browser
             system_uses_webdriver = datastore.data['settings']['application']['fetch_backend'] == 'html_webdriver'
-
-            watch_uses_webdriver = False
+            watch_needs_selenium_or_playwright = False
             if (watch.get('fetch_backend') == 'system' and system_uses_webdriver) or watch.get('fetch_backend') == 'html_webdriver' or watch.get('fetch_backend', '').startswith('extra_browser_'):
-                watch_uses_webdriver = True
+                watch_needs_selenium_or_playwright = True
+
 
             from zoneinfo import available_timezones
 
@@ -247,14 +245,17 @@ def construct_blueprint(datastore: ChangeDetectionStore, update_q, queuedWatchMe
                 'has_default_notification_urls': True if len(datastore.data['settings']['application']['notification_urls']) else False,
                 'has_extra_headers_file': len(datastore.get_all_headers_in_textfile_for_watch(uuid=uuid)) > 0,
                 'has_special_tag_options': _watch_has_tag_options_set(watch=watch),
-                'watch_uses_webdriver': watch_uses_webdriver,
                 'jq_support': jq_support,
                 'playwright_enabled': os.getenv('PLAYWRIGHT_DRIVER_URL', False),
                 'settings_application': datastore.data['settings']['application'],
+                'system_has_playwright_configured': os.getenv('PLAYWRIGHT_DRIVER_URL'),
+                'system_has_webdriver_configured': os.getenv('WEBDRIVER_URL'),
+                'visual_selector_data_ready': datastore.visualselector_data_is_ready(watch_uuid=uuid),
                 'timezone_default_config': datastore.data['settings']['application'].get('timezone'),
                 'using_global_webdriver_wait': not default['webdriver_delay'],
                 'uuid': uuid,
-                'watch': watch
+                'watch': watch,
+                'watch_needs_selenium_or_playwright': watch_needs_selenium_or_playwright,
             }
 
             included_content = None
